@@ -1,30 +1,40 @@
-import requests
-lines = open("ip.txt", "r").read().split("\n")
-
+import os
+import sys
 import re
-ips = []
+import requests
 
-for i in range(len(lines)):
-    ip = lines[i].split(".")
-    r = requests.post("http://magic-cookie.co.uk/cgi-bin/iplist-cgi.pl", data = {
-        "ipw" : ip[0],
-        "ipx" : ip[1],
-        "ipy" : ip[2],
-        "ipz" : ip[3],
-        "mask" : ip[4]
-    })
-    txt = r.text
-    ips.append(re.findall(r"(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})", txt))
+if(len(sys.argv) != 3):
+    print("Usage: main.py <CIDRs> <Output file>")
+    os._exit(-0)
+
+API_ENDPOINT = "http://magic-cookie.co.uk/cgi-bin/iplist-cgi.pl"
+
+cidrs  = open(sys.argv[1], "r").read().split("\n")[:-1] # Sorry, file should have newline at end :(
+output = open(sys.argv[2], "w")
+ips    = []
+
+def CIDRToRequest(cidr):
+    cidr = cidr.split(".")
+    cidr.append(cidr[3].split("/")[1])
+    cidr[3] = cidr[3].split("/")[0]
+    return {
+        "ipw":  cidr[0],
+        "ipx":  cidr[1],
+        "ipy":  cidr[2],
+        "ipz":  cidr[3],
+        "mask": cidr[4]
+    }
+
+
+
+def resolveCIDR(cidr):
+    response = requests.post(API_ENDPOINT, CIDRToRequest(cidr)).text
+    return re.findall(r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}", response)[2:]
     
-f = open("rez.txt", "w")
-for i in ips:
-    for j in i:
-        count = 0
-        for x in j:
-            if count < 3:
-                f.write(str(x) + ".")
-                count += 1
-            else:
-                f.write(str(x))
-        f.write("\n")
-f.close()
+for cidr in cidrs:
+    print("Resolving {0}...".format(cidr))
+    ips += resolveCIDR(cidr)
+
+for ip in ips:
+    output.write("{0}\n".format(ip))
+output.close()
